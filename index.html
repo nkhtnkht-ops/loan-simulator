@@ -206,6 +206,7 @@ const SCHEMA = [
     {k:'invReturn',     l:'想定利回り', u:'%', step:0.1},
     {k:'invInit',       l:'投資残高 初期値', u:'万円', step:10},
     {k:'cashInit',      l:'現金 初期値', u:'万円', step:10},
+    {k:'cashKeep',      l:'現金キープ目標(超過分は自動投資/0=オフ)', u:'万円', step:50},
     {k:'dcInit',        l:'企業型DC 残高', u:'万円', step:10},
     {k:'dcMonthly',     l:'DC拠出(天引き外)', u:'万円/月', step:0.5},
     {k:'reInit',        l:'不動産評価 初期値', u:'万円', step:10},
@@ -229,7 +230,7 @@ function defaultInputs(){
     loanAmount:4000, termYears:35, startAge:40,
     incomeMonthly:40, bonusAnnual:120, raise:1.5, income60:300, income65:200,
     livingMonthly:15, inflation:2.0, mgmtFee:20000, parking:10000, housingRise:1.5,
-    investMonthly:5, invReturn:5.0, invInit:500, cashInit:200,
+    investMonthly:5, invReturn:5.0, invInit:500, cashInit:200, cashKeep:300,
     dcInit:300, dcMonthly:2,
     reInit:4000, reDeprec:2.0, reFloor:1500,
     ratePath:defaultRatePath(),
@@ -314,6 +315,11 @@ function compute(inp){
     const cashTmp = cash + flow;
     if(cashTmp>=0){ cash=cashTmp; } else { shortfall=-cashTmp; cash=0; }
 
+    // --- 余剰の自動投資：現金キープ目標を超えた分を投資へ（0でオフ＝現金のまま）---
+    let sweep=0;
+    const keep=(inp.cashKeep||0)*10000;
+    if(keep>0 && cash>keep){ sweep=cash-keep; cash=keep; }
+
     // --- DC ---
     let lump=0;
     if(age<=59)     dc = dc*(1+inp.invReturn/100) + dcContrib; // 59歳まで成長＋拠出
@@ -321,7 +327,7 @@ function compute(inp){
     else            dc = 0;
 
     // --- investment ---
-    inv = inv*(1+inp.invReturn/100) + invContrib + lump - shortfall;
+    inv = inv*(1+inp.invReturn/100) + invContrib + lump - shortfall + sweep;
     if(inv<0) inv=0;
 
     // --- real estate ---
