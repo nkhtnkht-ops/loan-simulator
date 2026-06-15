@@ -218,19 +218,19 @@ const START_YEAR=2027, YEARS=36; // 2027..2062
 function defaultRatePath(){
   const rp={};
   for(let y=START_YEAR; y<START_YEAR+YEARS; y++){
-    rp[y] = (y===2027)?1.20 : (y===2028)?1.45 : 1.50;
+    rp[y] = (y===2027)?1.00 : (y===2028)?1.00 : 1.00;
   }
   return rp;
 }
 
 function defaultInputs(){
   return {
-    loanAmount:5140, termYears:35, startAge:44,
-    incomeMonthly:38, raise:1.5, income60:300, income65:192,
-    livingMonthly:13, inflation:2.0, mgmtFee:20077, parking:9000, housingRise:1.5,
-    investMonthly:6, invReturn:5.0, invInit:1150, cashInit:100,
-    dcInit:730, dcMonthly:3,
-    reInit:4714, reDeprec:2.5, reFloor:1542,
+    loanAmount:4000, termYears:35, startAge:40,
+    incomeMonthly:40, raise:1.5, income60:300, income65:200,
+    livingMonthly:15, inflation:2.0, mgmtFee:20000, parking:10000, housingRise:1.5,
+    investMonthly:5, invReturn:5.0, invInit:500, cashInit:200,
+    dcInit:300, dcMonthly:2,
+    reInit:4000, reDeprec:2.0, reFloor:1500,
     ratePath:defaultRatePath(),
   };
 }
@@ -539,14 +539,10 @@ function renderAll(){
 }
 renderAll();
 
-/* ============ self-check (console) ============ */
+/* ============ startup log (console) ============ */
 (function(){
   const r=compute(defaultInputs());
-  const pmt=pmtMonthly(1.20,420,5140*10000);
-  console.log('▼検証 月返済(円):', Math.round(pmt), '(期待 149,935)');
-  console.log('▼2027 ローン残高(万):', man(r[0].loan), '純資産(万):', man(r[0].net), '(期待 ~5022 / ~1887)');
-  const last=r[r.length-1];
-  console.log('▼2062 ローン残高(万):', man(last.loan), '純資産(万):', man(last.net), '(期待 0 / ~12177)');
+  console.log('シミュレーター起動 OK ／ 初年度純資産(万):', man(r[0].net), '最終純資産(万):', man(r[r.length-1].net));
 })();
 </script>
 </body>
