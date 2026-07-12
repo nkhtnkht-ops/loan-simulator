@@ -116,6 +116,7 @@
 <body>
 <header>
   <h1>🏠 住宅ローン・資産形成シミュレーター</h1>
+  <p>2026年7月 Fable改訂版：取崩し課税・固定資産税・住宅ローン減税・iDeCo受取課税・土地建物分離・年金スライドを反映</p>
 </header>
 
 <div class="wrap">
@@ -192,26 +193,51 @@ const SCHEMA = [
     {k:'bonusAnnual',   l:'賞与(手取り年額・59歳まで)', u:'万円/年', step:10},
     {k:'raise',         l:'昇給率(59歳まで)', u:'%', step:0.1},
     {k:'income60',      l:'60〜64歳 手取り年収', u:'万円', step:10},
-    {k:'income65',      l:'65歳〜 手取り年収', u:'万円', step:1},
+    {k:'income65',      l:'65歳〜 年金 手取り年収(65歳時点)', u:'万円', step:1},
+    {k:'pensionIndex',  l:'年金改定率(名目・インフレ−ｽﾗｲﾄﾞ調整)', u:'%/年', step:0.1},
   ]},
   {grp:'支出', items:[
     {k:'livingMonthly', l:'生活費', u:'万円/月', step:0.5},
     {k:'inflation',     l:'生活費インフレ率', u:'%', step:0.1},
     {k:'mgmtFee',       l:'管理費+修繕+ネット', u:'円/月', step:100},
     {k:'parking',       l:'駐車場', u:'円/月', step:100},
-    {k:'housingRise',   l:'住居関連費の上昇率', u:'%', step:0.1},
+    {k:'housingRise',   l:'住居関連費の上昇率(修繕段階増額の平準化)', u:'%', step:0.1},
+    {k:'insurance',     l:'火災・地震保険', u:'万円/年', step:0.5},
+    {k:'renovYear1',    l:'設備更新① 実施年', u:'年', step:1},
+    {k:'renovCost1',    l:'設備更新① 費用', u:'万円', step:10},
+    {k:'renovYear2',    l:'設備更新② 実施年', u:'年', step:1},
+    {k:'renovCost2',    l:'設備更新② 費用', u:'万円', step:10},
+  ]},
+  {grp:'税・公課', items:[
+    {k:'propTaxReduced', l:'固都税 新築軽減中', u:'万円/年', step:0.5},
+    {k:'propTaxYears',   l:'新築軽減の年数', u:'年', step:1},
+    {k:'propTaxFull',    l:'固都税 軽減終了後', u:'万円/年', step:0.5},
+    {k:'propTaxDecay',   l:'固都税 経年逓減率', u:'%/年', step:0.1},
+    {k:'loanDeduct',     l:'住宅ローン控除(1=有 0=無)', u:'', step:1},
+    {k:'deductRate',     l:'控除率', u:'%', step:0.1},
+    {k:'deductYears',    l:'控除期間', u:'年', step:1},
+    {k:'deductCap',      l:'控除対象 借入限度額', u:'万円', step:100},
+    {k:'capGainsTax',    l:'金融所得課税率', u:'%', step:0.001},
+    {k:'nisaRatio',      l:'NISA非課税割合(投資残高中)', u:'%', step:5},
+    {k:'idecoDeduction', l:'iDeCo/DC 退職所得控除', u:'万円', step:10},
+    {k:'idecoTaxRate',   l:'退職所得の実効税率', u:'%', step:1},
   ]},
   {grp:'資産運用', items:[
     {k:'investMonthly', l:'積立投資額(59歳まで)', u:'万円/月', step:0.5},
-    {k:'invReturn',     l:'想定利回り', u:'%', step:0.1},
+    {k:'invReturn',     l:'想定利回り(税引前)', u:'%', step:0.1},
     {k:'invInit',       l:'投資残高 初期値', u:'万円', step:10},
+    {k:'invBasisInit',  l:'投資簿価(投下元本) 初期値', u:'万円', step:10},
     {k:'cashInit',      l:'現金 初期値', u:'万円', step:10},
     {k:'cashKeep',      l:'現金キープ目標(超過分は自動投資/0=オフ)', u:'万円', step:50},
     {k:'dcInit',        l:'企業型DC 残高', u:'万円', step:10},
     {k:'dcMonthly',     l:'DC拠出(天引き外)', u:'万円/月', step:0.5},
-    {k:'reInit',        l:'不動産評価 初期値', u:'万円', step:10},
-    {k:'reDeprec',      l:'不動産 減価率', u:'%', step:0.1},
-    {k:'reFloor',       l:'不動産 評価下限', u:'万円', step:10},
+  ]},
+  {grp:'不動産（自宅は税務上の減価償却不可→建物の市場価値減価として反映）', items:[
+    {k:'reInit',     l:'引渡し時評価(新築ﾌﾟﾚﾐｱﾑ剥落後)', u:'万円', step:10},
+    {k:'reLand',     l:'うち土地持分評価', u:'万円', step:10},
+    {k:'reDeprec',   l:'建物の市場価値減価率(定率)', u:'%/年', step:0.1},
+    {k:'landGrowth', l:'土地変動率', u:'%/年', step:0.1},
+    {k:'sellCost',   l:'売却コスト率(仲介等・純資産計上時控除)', u:'%', step:0.1},
   ]},
 ];
 
@@ -229,10 +255,16 @@ function defaultInputs(){
   return {
     loanAmount:4000, termYears:35, startAge:40,
     incomeMonthly:40, bonusAnnual:120, raise:1.5, income60:300, income65:200,
-    livingMonthly:15, inflation:2.0, mgmtFee:20000, parking:10000, housingRise:1.5,
-    investMonthly:5, invReturn:5.0, invInit:500, cashInit:200, cashKeep:300,
+    pensionIndex:1.4,
+    livingMonthly:15, inflation:2.0, mgmtFee:20000, parking:10000, housingRise:2.5,
+    insurance:3, renovYear1:2042, renovCost1:150, renovYear2:2052, renovCost2:250,
+    propTaxReduced:12, propTaxYears:5, propTaxFull:18, propTaxDecay:1.0,
+    loanDeduct:1, deductRate:0.7, deductYears:13, deductCap:3000,
+    capGainsTax:20.315, nisaRatio:60, idecoDeduction:1150, idecoTaxRate:25,
+    investMonthly:5, invReturn:5.0, invInit:500, invBasisInit:400,
+    cashInit:200, cashKeep:300,
     dcInit:300, dcMonthly:2,
-    reInit:4000, reDeprec:2.0, reFloor:1500,
+    reInit:4000, reLand:1000, reDeprec:3.5, landGrowth:0.0, sellCost:3.5,
     ratePath:defaultRatePath(),
   };
 }
@@ -243,12 +275,18 @@ const COLORS=['#2563eb','#dc2626','#16a34a','#d97706'];
 let state = load();
 function load(){
   try{
-    const raw = localStorage.getItem('loanSimV1');
-    if(raw){ const s=JSON.parse(raw); if(s.scenarios && s.scenarios.length) return s; }
+    const raw = localStorage.getItem('loanSimV2');
+    if(raw){ const s=JSON.parse(raw); if(s.scenarios && s.scenarios.length) return migrate(s); }
+    const rawV1 = localStorage.getItem('loanSimV1');   // 旧版から引き継ぎ（新項目はデフォルト補完）
+    if(rawV1){ const s=JSON.parse(rawV1); if(s.scenarios && s.scenarios.length) return migrate(s); }
   }catch(e){}
   return { scenarios:[ {id:uid(), name:'基本シナリオ', inputs:defaultInputs()} ], activeId:null };
 }
-function save(){ localStorage.setItem('loanSimV1', JSON.stringify(state)); }
+function migrate(s){
+  s.scenarios.forEach(sc=>{ sc.inputs = Object.assign(defaultInputs(), sc.inputs); delete sc.inputs.reFloor; });
+  return s;
+}
+function save(){ localStorage.setItem('loanSimV2', JSON.stringify(state)); }
 function uid(){ return 's'+Math.floor(performance.now()*1000).toString(36)+Math.floor(Math.random()*1e6).toString(36); }
 function active(){ return state.scenarios.find(s=>s.id===state.activeId) || state.scenarios[0]; }
 if(!state.activeId) state.activeId = state.scenarios[0].id;
@@ -269,18 +307,20 @@ function getRate(inp, year){
 
 function compute(inp){
   const termMonths = inp.termYears*12;
-  let loan = inp.loanAmount*10000;
-  let cash = inp.cashInit*10000;
-  let inv  = inp.invInit*10000;
-  let dc   = inp.dcInit*10000;
+  let loan  = inp.loanAmount*10000;
+  let cash  = inp.cashInit*10000;
+  let inv   = inp.invInit*10000;
+  let basis = Math.min(inp.invBasisInit*10000, inp.invInit*10000); // 簿価>残高は不整合なので丸める
+  let dc    = inp.dcInit*10000;
   let pmt=0, prevRate=null;
+  const r = inp.invReturn/100;
   const rows=[];
   for(let k=0;k<YEARS;k++){
     const year=START_YEAR+k, age=inp.startAge+k;
     const rate=getRate(inp,year);
     const remMonths = termMonths - k*12;
 
-    // --- repayment (元利均等 + 再アモチ) ---
+    // --- repayment (元利均等 + 金利変更年に再アモチ) ---
     let repay=0;
     if(loan>1){
       const payoff = loan*(1+rate/100);
@@ -297,20 +337,29 @@ function compute(inp){
     } else { loan=0; }
     prevRate=rate;
 
-    // --- income ---
+    // --- income（65歳〜は名目スライド改定。実質はインフレとの差分だけ毎年目減り）---
     let income;
     if(age<=59)      income = (inp.incomeMonthly*12 + (inp.bonusAnnual||0))*10000*Math.pow(1+inp.raise/100, age-inp.startAge);
     else if(age<=64) income = inp.income60*10000;
-    else             income = inp.income65*10000;
+    else             income = inp.income65*10000*Math.pow(1+(inp.pensionIndex||0)/100, age-65);
 
     // --- expenses ---
     const living  = inp.livingMonthly*12*10000*Math.pow(1+inp.inflation/100, k);
     const housing = (inp.mgmtFee+inp.parking)*12*Math.pow(1+inp.housingRise/100, k);
+    const propTax = (k<inp.propTaxYears ? inp.propTaxReduced
+                     : inp.propTaxFull*Math.pow(1-inp.propTaxDecay/100, k-inp.propTaxYears))*10000
+                    + inp.insurance*10000;
+    const renov = (year===+inp.renovYear1 ? inp.renovCost1 : 0)*10000
+                + (year===+inp.renovYear2 ? inp.renovCost2 : 0)*10000;
     const invContrib = age<=59 ? inp.investMonthly*12*10000 : 0;
     const dcContrib  = age<=59 ? inp.dcMonthly*12*10000 : 0;
 
+    // --- 住宅ローン控除（年末残高ベース・所得税+住民税枠内と仮定）---
+    const deduct = (inp.loanDeduct==1 && k<inp.deductYears)
+                   ? Math.min(loan, inp.deductCap*10000)*inp.deductRate/100 : 0;
+
     // --- cash flow ---
-    const flow = income - repay - living - housing - invContrib;
+    const flow = income - repay - living - housing - propTax + deduct - invContrib - renov;
     let shortfall=0;
     const cashTmp = cash + flow;
     if(cashTmp>=0){ cash=cashTmp; } else { shortfall=-cashTmp; cash=0; }
@@ -320,21 +369,37 @@ function compute(inp){
     const keep=(inp.cashKeep||0)*10000;
     if(keep>0 && cash>keep){ sweep=cash-keep; cash=keep; }
 
-    // --- DC ---
-    let lump=0;
-    if(age<=59)     dc = dc*(1+inp.invReturn/100) + dcContrib; // 59歳まで成長＋拠出
-    else if(age===60){ lump = dc; dc=0; }                      // 60歳で残高を一括受取し投資へ
+    // --- DC（60歳一括受取：退職所得控除の超過分×1/2に実効税率で課税）---
+    let lump=0, lumpTax=0;
+    if(age<=59)     dc = dc*(1+r) + dcContrib;
+    else if(age===60){
+      lumpTax = Math.max(0,(dc-inp.idecoDeduction*10000)/2)*inp.idecoTaxRate/100;
+      lump = dc - lumpTax; dc=0;
+    }
     else            dc = 0;
 
-    // --- investment ---
-    inv = inv*(1+inp.invReturn/100) + invContrib + lump - shortfall + sweep;
-    if(inv<0) inv=0;
+    // --- investment（簿価トラッキング＋取崩し時のみ譲渡益課税・グロスアップ）---
+    const invPre   = inv*(1+r) + invContrib*Math.sqrt(1+r) + lump + sweep;
+    const basisPre = basis + invContrib + lump + sweep;
+    let grossW=0, wTax=0, broke=false;
+    if(shortfall>0 && invPre>0){
+      const gainFrac = Math.max(0, 1 - basisPre/invPre);
+      const effTax   = inp.capGainsTax/100*(1-inp.nisaRatio/100)*gainFrac;
+      grossW = Math.min(invPre, shortfall/(1-effTax));
+      wTax   = grossW*effTax;
+      if(grossW - wTax < shortfall-1) broke=true;   // 全売却しても不足＝資金ショート
+    } else if(shortfall>0){ broke=true; }
+    inv   = invPre - grossW;
+    basis = invPre>0 ? Math.max(0, basisPre*(1-grossW/invPre)) : 0;
 
-    // --- real estate ---
-    const re = Math.max(inp.reFloor*10000, inp.reInit*10000*Math.pow(1-inp.reDeprec/100, k));
+    // --- real estate（土地横ばい＋建物定率減価、売却コスト控除後の正味）---
+    const re = ( inp.reLand*10000*Math.pow(1+(inp.landGrowth||0)/100, k)
+               + Math.max(0,(inp.reInit-inp.reLand))*10000*Math.pow(1-inp.reDeprec/100, k)
+               ) * (1-inp.sellCost/100);
 
     const net = cash + inv + dc + re - loan;
-    rows.push({year,age,rate,repay,loan,flow,cash,inv,dc,re,net});
+    const netReal = net/Math.pow(1+inp.inflation/100, k);   // 2027年価値ベース
+    rows.push({year,age,rate,repay,loan,propTax,deduct,flow,cash,grossW,wTax,inv,dc,re,net,netReal,broke,lumpTax});
   }
   return rows;
 }
@@ -430,32 +495,38 @@ function renderSummary(){
   const inp=a.inputs;
   const rate0=getRate(inp,2027);
   const pmt = pmtMonthly(rate0, inp.termYears*12, inp.loanAmount*10000); // yen/month
-  const incomeM = inp.incomeMonthly*10000;
-  const mgmtM   = inp.mgmtFee+inp.parking;
-  const livingM = inp.livingMonthly*10000;
-  const surplus = incomeM - pmt - mgmtM - livingM;
-  const investM = inp.investMonthly*10000;
-  const over = investM>surplus;
+  const incomeM  = inp.incomeMonthly*10000;
+  const mgmtM    = inp.mgmtFee+inp.parking;
+  const livingM  = inp.livingMonthly*10000;
+  const propTaxM = (inp.propTaxReduced+inp.insurance)*10000/12;
+  const deductM  = (inp.loanDeduct==1)
+                   ? Math.min(inp.loanAmount,inp.deductCap)*10000*inp.deductRate/100/12 : 0;
+  const surplus  = incomeM - pmt - mgmtM - livingM - propTaxM;   // 減税考慮前
+  const investM  = inp.investMonthly*10000;
+  const over = investM>surplus+deductM;
 
+  const yen = v => Math.round(v).toLocaleString('ja-JP');
   const cards=[
-    ['手取り', '+'+fmt(incomeM), '万/月'],
-    ['ローン返済', '−'+Math.round(pmt).toLocaleString('ja-JP'), '円/月'],
-    ['管理費等', '−'+fmt(mgmtM), '万/月'],
-    ['生活費', '−'+fmt(livingM), '万/月'],
+    ['手取り', '+'+yen(incomeM), '円/月'],
+    ['ローン返済', '−'+yen(pmt), '円/月'],
+    ['管理費等', '−'+yen(mgmtM), '円/月'],
+    ['固都税・保険(軽減中)', '−'+yen(propTaxM), '円/月'],
+    ['生活費', '−'+yen(livingM), '円/月'],
+    ['ローン減税(当初'+inp.deductYears+'年)', '+'+yen(deductM), '円/月'],
   ];
   let html='';
   cards.forEach(c=>{ html+='<div class="scard"><div class="lbl">'+c[0]+'</div><div class="val">'+c[1]+' <small>'+c[2]+'</small></div></div>'; });
-  html+='<div class="scard result"><div class="lbl">投資可能余剰</div><div class="val">'+fmtSigned(surplus)+' <small>万/月</small></div></div>';
-  html+='<div class="scard '+(over?'alert':'ok')+'"><div class="lbl">設定 積立額</div><div class="val">'+fmt(investM)+' <small>万/月</small></div></div>';
+  html+='<div class="scard result"><div class="lbl">投資可能余剰(減税前)</div><div class="val">'+(surplus>=0?'+':'')+yen(surplus)+' <small>円/月</small></div></div>';
+  html+='<div class="scard '+(over?'alert':'ok')+'"><div class="lbl">設定 積立額</div><div class="val">'+yen(investM)+' <small>円/月</small></div></div>';
   document.getElementById('summary').innerHTML=html;
 
   const w=document.getElementById('warn');
   if(over){
     w.className='warnbar show bad';
-    w.textContent='⚠ 積立額（'+fmt(investM)+'万）が投資可能余剰（'+fmt(surplus)+'万）を超えています。現金が不足し投資取り崩しが発生します。';
+    w.textContent='⚠ 積立額（'+yen(investM)+'円）が実質余剰（減税込 '+yen(surplus+deductM)+'円）を超えています。現金が不足し、課税を伴う投資取り崩しが発生します。';
   }else{
     w.className='warnbar show ok';
-    w.textContent='✓ 積立後の月次余剰：'+fmt(surplus-investM)+'万（余剰内に収まっています）';
+    w.textContent='✓ 積立後の月次余剰：減税込 '+yen(surplus+deductM-investM)+'円 ／ 減税が切れた後 '+yen(surplus-investM)+'円';
   }
 }
 
@@ -519,22 +590,27 @@ function renderTable(){
   const a=active();
   document.getElementById('tblName').textContent=a.name;
   const rows=compute(a.inputs);
-  const heads=['年','年齢','金利','返済額','ローン残高','年間収支','現金','投資','DC','不動産','純資産'];
+  const heads=['年','年齢','金利','返済額','ローン残高','固都税等','減税','年間収支','現金','取崩し','うち税','投資','DC','不動産(正味)','純資産','純資産(実質)'];
   let html='<tr>'; heads.forEach(h=>html+='<th>'+h+'</th>'); html+='</tr>';
   rows.forEach(r=>{
     const mile=(r.year===2027||r.year===2062||r.age===60||r.age===65);
-    html+='<tr class="'+(mile?'milestone':'')+'">'+
-      '<td>'+r.year+'</td>'+
+    html+='<tr class="'+(mile?'milestone':'')+'"'+(r.broke?' style="background:#3b0d0d"':'')+'>'+
+      '<td>'+r.year+(r.broke?' ⚠':'')+'</td>'+
       '<td>'+r.age+'</td>'+
       '<td>'+r.rate.toFixed(2)+'%</td>'+
       '<td>'+fmt(r.repay)+'</td>'+
       '<td>'+fmt(r.loan)+'</td>'+
+      '<td>'+fmt(r.propTax)+'</td>'+
+      '<td>'+(r.deduct>0?fmt(r.deduct):'−')+'</td>'+
       '<td class="'+(r.flow>=0?'pos':'neg')+'">'+fmtSigned(r.flow)+'</td>'+
       '<td>'+fmt(r.cash)+'</td>'+
+      '<td>'+(r.grossW>0?fmt(r.grossW):'−')+'</td>'+
+      '<td>'+(r.wTax>0.5*10000?fmt(r.wTax):'−')+'</td>'+
       '<td>'+fmt(r.inv)+'</td>'+
       '<td>'+fmt(r.dc)+'</td>'+
       '<td>'+fmt(r.re)+'</td>'+
       '<td><b>'+fmt(r.net)+'</b></td>'+
+      '<td>'+fmt(r.netReal)+'</td>'+
       '</tr>';
   });
   document.getElementById('dataTable').innerHTML=html;
